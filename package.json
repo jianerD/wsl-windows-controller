@@ -1,0 +1,34 @@
+{
+  "name": "wsl-windows-controller",
+  "version": "1.0.0",
+  "description": "从WSL控制Windows系统的CLI工具",
+  "main": "dist/index.js",
+  "bin": {
+    "wsl-win": "./dist/index.js"
+  },
+  "scripts": {
+    "build": "tsc",
+    "start": "node dist/index.js",
+    "dev": "ts-node src/index.ts",
+    "pkg": "pkg . --targets node18-win-x64 --output wsl-win"
+  },
+  "keywords": ["wsl", "windows", "automation", "controller"],
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "chalk": "^4.1.2",
+    "commander": "^11.1.0",
+    "inquirer": "^8.2.5",
+    "node-fetch": "^2.7.0",
+    "shelljs": "^0.8.5",
+    "winston": "^3.11.0"
+  },
+  "devDependencies": {
+    "@types/inquirer": "^8.2.10",
+    "@types/node": "^20.10.6",
+    "@types/shelljs": "^0.8.15",
+    "pkg": "^5.4.1",
+    "ts-node": "^10.9.2",
+    "typescript": "^5.3.3"
+  }
+}
