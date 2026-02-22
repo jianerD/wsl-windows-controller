@@ -107,19 +107,18 @@ export function processCommands(program: Command) {
       console.log(chalk.yellow(`监控进程: ${procName}`))
       console.log(chalk.gray('按 Ctrl+C 停止'))
       
-      const interval = parseInt(options.interval) * 1000
-      
+      const intervalSec = options.interval || '5'
       const psCommand = `
         while($true) {
           $proc = Get-Process -Name "${procName}" -ErrorAction SilentlyContinue
           if($proc) {
-            $mem = [math]::Round($proc.WorkingSet64/1MB, 2)
-            $cpu = [math]::Round($proc.CPU, 2)
-            Write-Host "[$(Get-Date -Format 'HH:mm:ss')] PID: $($proc.Id) | CPU: ${cpu}s | Memory: ${mem}MB"
+            $memVal = [math]::Round($proc.WorkingSet64/1MB, 2)
+            $cpuVal = [math]::Round($proc.CPU, 2)
+            Write-Host "[$(Get-Date -Format 'HH:mm:ss')] PID: $($proc.Id) | CPU: $($cpuVal)s | Memory: $($memVal)MB"
           } else {
             Write-Host "[$(Get-Date -Format 'HH:mm:ss')] 进程未运行"
           }
-          Start-Sleep -Seconds ${options.interval}
+          Start-Sleep -Seconds ${intervalSec}
         }
       `
       

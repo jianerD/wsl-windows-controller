@@ -26,12 +26,14 @@ export interface PSOptions {
   timeout?: number
 }
 
-// 执行PowerShell命令
-export async function runPowerShell(command: string, options: PSOptions = {}): Promise<string> {
-  const { verbose = false, json = false, timeout = 30 } = options
+// 执行PowerShell命令 (同步)
+export function runPowerShell(command: string, options: PSOptions = {}): string {
+  const { verbose = false, timeout = 30 } = options
 
-  // 构建完整命令
-  const fullCommand = `powershell.exe -NoProfile -NonInteractive -Command "${command.replace(/"/g, '\\"')}"`
+  // 使用单引号包围整个命令，让bash不解释任何内容
+  // 将PowerShell变量$替换为\$来转义
+  const escapedCmd = command.replace(/\\/g, '\\\\').replace(/\$/g, '\\$')
+  const fullCommand = `/mnt/c/Windows/System32/WindowsPowerShell/v1.0/powershell.exe -NoProfile -NonInteractive -Command '${escapedCmd}'`
 
   if (verbose) {
     logger.info(chalk.gray(`执行: ${command}`))
@@ -40,26 +42,28 @@ export async function runPowerShell(command: string, options: PSOptions = {}): P
   try {
     const result = execSync(fullCommand, {
       encoding: 'utf-8',
-      timeout: timeout * 1000,
-      stdio: ['pipe', 'pipe', 'pipe'],
-      shell: false,
-      windowsHide: true
+      timeout: timeout * 1000
     })
 
     if (verbose) {
       logger.info(chalk.green('执行成功'))
     }
 
-    return result.trim()
+    return result.toString().trim()
   } catch (error: any) {
     if (error.stdout) {
-      return error.stdout.trim()
+      return error.stdout.toString().trim()
     }
     
     const errorMsg = error.stderr ? error.stderr.toString() : error.message
     logger.error(chalk.red(`PowerShell执行失败: ${errorMsg}`))
     throw new Error(errorMsg)
   }
+}
+
+// 异步版本
+export async function runPowerShellAsync(command: string, options: PSOptions = {}): Promise<string> {
+  return runPowerShell(command, options)
 }
 
 // 执行Windows可执行文件
@@ -118,6 +122,7 @@ export function getWindowsHostname(): string {
 export default {
   logger,
   runPowerShell,
+  runPowerShellAsync,
   runWindowsExe,
   isWSL,
   pathExists,

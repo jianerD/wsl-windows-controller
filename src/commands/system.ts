@@ -141,12 +141,12 @@ export function systemCommands(program: Command) {
         const result = await runPowerShell(`
           $os = Get-CimInstance Win32_OperatingSystem
           $cpu = Get-CimInstance Win32_Processor
-          $mem = [math]::Round($os.TotalVisibleMemorySize / 1MB, 2)
+          $memVal = [math]::Round($os.TotalVisibleMemorySize / 1MB, 2)
           Write-Host "计算机名: $env:COMPUTERNAME"
           Write-Host "用户名: $env:USERNAME"
           Write-Host "操作系统: $($os.Caption) $($os.Version)"
           Write-Host "CPU: $($cpu.Name)"
-          Write-Host "内存: ${mem} GB"
+          Write-Host "内存: $($memVal) GB"
           Write-Host "架构: $env:PROCESSOR_ARCHITECTURE"
         `)
         console.log(chalk.white(result))
