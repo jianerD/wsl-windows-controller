@@ -30,19 +30,21 @@ export interface PSOptions {
 export function runPowerShell(command: string, options: PSOptions = {}): string {
   const { verbose = false, timeout = 30 } = options
 
-  // 使用单引号包围整个命令，让bash不解释任何内容
-  // 将PowerShell变量$替换为\$来转义
-  const escapedCmd = command.replace(/\\/g, '\\\\').replace(/\$/g, '\\$')
-  const fullCommand = `/mnt/c/Windows/System32/WindowsPowerShell/v1.0/powershell.exe -NoProfile -NonInteractive -Command '${escapedCmd}'`
+  // 使用base64编码命令，避免shell转义问题
+  // 将额外参数包含在命令内部
+  const psPath = '/mnt/c/Windows/System32/WindowsPowerShell/v1.0/powershell.exe'
+  const encodedCmd = Buffer.from(`$VerbosePreference='SilentlyContinue';$WarningPreference='SilentlyContinue';$InformationPreference='SilentlyContinue';$ProgressPreference='SilentlyContinue';${command}`, 'utf16le').toString('base64')
+  const fullExec = `${psPath} -NoProfile -NonInteractive -ExecutionPolicy Bypass -EncodedCommand ${encodedCmd}`
 
   if (verbose) {
     logger.info(chalk.gray(`执行: ${command}`))
   }
 
   try {
-    const result = execSync(fullCommand, {
+    const result = execSync(fullExec, {
       encoding: 'utf-8',
-      timeout: timeout * 1000
+      timeout: timeout * 1000,
+      stdio: ['pipe', 'pipe', 'ignore']  // 忽略错误输出
     })
 
     if (verbose) {
