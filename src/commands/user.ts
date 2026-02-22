@@ -1,6 +1,7 @@
 import { Command } from 'commander'
 import chalk from 'chalk'
 import { runPowerShell, logger } from '../utils/powershell'
+import { escapePSArg, validateUsername, validatePassword, securityLog, confirmDangerous, DANGEROUS_OPERATIONS } from '../utils/security'
 
 export function userCommands(program: Command) {
   const user = program
@@ -29,13 +30,34 @@ export function userCommands(program: Command) {
     .option('-d, --description <desc>', '用户描述')
     .action(async (username: string, password: string, options) => {
       try {
-        const desc = options.description || ''
+        // 验证用户名
+        const userValid = validateUsername(username)
+        if (!userValid.valid) {
+          console.log(chalk.red(`✗ 用户名验证失败: ${userValid.error}`))
+          return
+        }
+        
+        // 验证密码
+        const pwdValid = validatePassword(password)
+        if (!pwdValid.valid) {
+          console.log(chalk.red(`✗ 密码验证失败: ${pwdValid.error}`))
+          return
+        }
+        
+        const safeUser = escapePSArg(username)
+        const safeDesc = escapePSArg(options.description || '')
+        
+        // 使用安全方式设置密码（通过变量传递）
         await runPowerShell(`
-          New-LocalUser -Name "${username}" -Password (ConvertTo-SecureString "${password}" -AsPlainText -Force) -Description "${desc}"
+          $pwd = ConvertTo-SecureString "${password}" -AsPlainText -Force
+          New-LocalUser -Name "${safeUser}" -Password $pwd -Description "${safeDesc}"
         `)
+        
         console.log(chalk.green(`✓ 已创建用户: ${username}`))
+        securityLog('user.create', username, true)
       } catch (error: any) {
         logger.error(chalk.red(`创建用户失败: ${error.message}`))
+        securityLog('user.create', username, false)
       }
     })
 
@@ -46,14 +68,27 @@ export function userCommands(program: Command) {
     .option('-f, --force', '强制删除')
     .action(async (username: string, options) => {
       try {
+        const userValid = validateUsername(username)
+        if (!userValid.valid) {
+          console.log(chalk.red(`✗ ${userValid.error}`))
+          return
+        }
+        
+        if (options.force) {
+          confirmDangerous('delete_user', `删除用户: ${username}`)
+        }
+        
+        const safeUser = escapePSArg(username)
         const cmd = options.force
-          ? `Remove-LocalUser -Name "${username}" -Force`
-          : `Remove-LocalUser -Name "${username}"`
+          ? `Remove-LocalUser -Name "${safeUser}" -Force`
+          : `Remove-LocalUser -Name "${safeUser}"`
         
         await runPowerShell(cmd)
         console.log(chalk.green(`✓ 已删除用户: ${username}`))
+        securityLog('user.delete', username, true)
       } catch (error: any) {
         logger.error(chalk.red(`删除用户失败: ${error.message}`))
+        securityLog('user.delete', username, false)
       }
     })
 
@@ -63,12 +98,29 @@ export function userCommands(program: Command) {
     .description('设置用户密码')
     .action(async (username: string, password: string) => {
       try {
+        const userValid = validateUsername(username)
+        if (!userValid.valid) {
+          console.log(chalk.red(`✗ 用户名验证失败: ${userValid.error}`))
+          return
+        }
+        
+        const pwdValid = validatePassword(password)
+        if (!pwdValid.valid) {
+          console.log(chalk.red(`✗ 密码验证失败: ${pwdValid.error}`))
+          return
+        }
+        
+        const safeUser = escapePSArg(username)
         await runPowerShell(`
-          Set-LocalUser -Name "${username}" -Password (ConvertTo-SecureString "${password}" -AsPlainText -Force)
+          $pwd = ConvertTo-SecureString "${password}" -AsPlainText -Force
+          Set-LocalUser -Name "${safeUser}" -Password $pwd
         `)
+        
         console.log(chalk.green(`✓ 已设置密码: ${username}`))
+        securityLog('user.password', username, true)
       } catch (error: any) {
         logger.error(chalk.red(`设置密码失败: ${error.message}`))
+        securityLog('user.password', username, false)
       }
     })
 
@@ -78,12 +130,13 @@ export function userCommands(program: Command) {
     .description('启用用户')
     .action(async (username: string) => {
       try {
-        await runPowerShell(`
-          Enable-LocalUser -Name "${username}"
-        `)
+        const safeUser = escapePSArg(username)
+        await runPowerShell(`Enable-LocalUser -Name "${safeUser}"`)
         console.log(chalk.green(`✓ 已启用用户: ${username}`))
+        securityLog('user.enable', username, true)
       } catch (error: any) {
         logger.error(chalk.red(`启用用户失败: ${error.message}`))
+        securityLog('user.enable', username, false)
       }
     })
 
@@ -92,12 +145,13 @@ export function userCommands(program: Command) {
     .description('禁用用户')
     .action(async (username: string) => {
       try {
-        await runPowerShell(`
-          Disable-LocalUser -Name "${username}"
-        `)
+        const safeUser = escapePSArg(username)
+        await runPowerShell(`Disable-LocalUser -Name "${safeUser}"`)
         console.log(chalk.green(`✓ 已禁用用户: ${username}`))
+        securityLog('user.disable', username, true)
       } catch (error: any) {
         logger.error(chalk.red(`禁用用户失败: ${error.message}`))
+        securityLog('user.disable', username, false)
       }
     })
 
@@ -122,8 +176,9 @@ export function userCommands(program: Command) {
     .description('列出组成员')
     .action(async (groupname: string) => {
       try {
+        const safeGroup = escapePSArg(groupname)
         const result = await runPowerShell(`
-          Get-LocalGroupMember -Group "${groupname}" | Select-Object Name, ObjectClass, PrincipalSource | Format-Table -AutoSize
+          Get-LocalGroupMember -Group "${safeGroup}" | Select-Object Name, ObjectClass, PrincipalSource | Format-Table -AutoSize
         `)
         console.log(chalk.white(result))
       } catch (error: any) {
@@ -137,12 +192,16 @@ export function userCommands(program: Command) {
     .description('将用户添加到组')
     .action(async (username: string, groupname: string) => {
       try {
+        const safeUser = escapePSArg(username)
+        const safeGroup = escapePSArg(groupname)
         await runPowerShell(`
-          Add-LocalGroupMember -Group "${groupname}" -Member "${username}"
+          Add-LocalGroupMember -Group "${safeGroup}" -Member "${safeUser}"
         `)
         console.log(chalk.green(`✓ 已将 ${username} 添加到组: ${groupname}`))
+        securityLog('user.addgroup', `${username} -> ${groupname}`, true)
       } catch (error: any) {
         logger.error(chalk.red(`添加到组失败: ${error.message}`))
+        securityLog('user.addgroup', `${username} -> ${groupname}`, false)
       }
     })
 
@@ -152,12 +211,16 @@ export function userCommands(program: Command) {
     .description('从组移除用户')
     .action(async (username: string, groupname: string) => {
       try {
+        const safeUser = escapePSArg(username)
+        const safeGroup = escapePSArg(groupname)
         await runPowerShell(`
-          Remove-LocalGroupMember -Group "${groupname}" -Member "${username}"
+          Remove-LocalGroupMember -Group "${safeGroup}" -Member "${safeUser}"
         `)
         console.log(chalk.green(`✓ 已将 ${username} 从组移除: ${groupname}`))
+        securityLog('user.removegroup', `${username} <- ${groupname}`, true)
       } catch (error: any) {
         logger.error(chalk.red(`从组移除失败: ${error.message}`))
+        securityLog('user.removegroup', `${username} <- ${groupname}`, false)
       }
     })
 
@@ -167,8 +230,9 @@ export function userCommands(program: Command) {
     .description('获取用户详细信息')
     .action(async (username: string) => {
       try {
+        const safeUser = escapePSArg(username)
         const result = await runPowerShell(`
-          Get-LocalUser -Name "${username}" | Format-List
+          Get-LocalUser -Name "${safeUser}" | Format-List
         `)
         console.log(chalk.white(result))
       } catch (error: any) {

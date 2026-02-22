@@ -1,6 +1,7 @@
 import { Command } from 'commander'
 import chalk from 'chalk'
 import { runPowerShell, logger } from '../utils/powershell'
+import { confirmDangerous, securityLog } from '../utils/security'
 
 export function systemCommands(program: Command) {
   const system = program
@@ -22,11 +23,18 @@ export function systemCommands(program: Command) {
           console.log(chalk.yellow(`将在 ${timeout} 秒后关机...`))
         }
         
+        // 危险操作确认
+        const actionName = options.force ? 'force_shutdown' : 'shutdown'
+        confirmDangerous(actionName, `关闭Windows${options.force ? ' (强制)' : ''}`)
+        
         const cmd = `shutdown ${force} /s /t ${timeout}`
         await runPowerShell(cmd)
+        
         console.log(chalk.green('✓ 关机命令已发送'))
+        securityLog('system.shutdown', `force=${options.force}, timeout=${timeout}`, true)
       } catch (error: any) {
         logger.error(chalk.red(`关机失败: ${error.message}`))
+        securityLog('system.shutdown', 'failed', false)
       }
     })
 
@@ -45,11 +53,18 @@ export function systemCommands(program: Command) {
           console.log(chalk.yellow(`将在 ${timeout} 秒后重启...`))
         }
         
+        // 危险操作确认
+        const actionName = options.force ? 'force_restart' : 'restart'
+        confirmDangerous(actionName, `重启Windows${options.force ? ' (强制)' : ''}`)
+        
         const cmd = `shutdown ${force} /r /t ${timeout}`
         await runPowerShell(cmd)
+        
         console.log(chalk.green('✓ 重启命令已发送'))
+        securityLog('system.restart', `force=${options.force}, timeout=${timeout}`, true)
       } catch (error: any) {
         logger.error(chalk.red(`重启失败: ${error.message}`))
+        securityLog('system.restart', 'failed', false)
       }
     })
 
